@@ -289,15 +289,15 @@ private fun SettingsScreen(vm: AppViewModel) {
         item {
             Card(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    SwitchRow("Auto-update hosts", "Once a day on unmetered networks", vm.autoUpdate) { vm.setAutoUpdate(it) }
-                    SwitchRow("Start on boot", "Needs VPN permission granted once", vm.startOnBoot) { vm.setStartOnBoot(it) }
+                    SwitchRow("Auto-update hosts", "Once a day on unmetered networks", vm.autoUpdate) { vm.changeAutoUpdate(it) }
+                    SwitchRow("Start on boot", "Needs VPN permission granted once", vm.startOnBoot) { vm.changeStartOnBoot(it) }
                 }
             }
         }
         item { Text("Upstream DNS", style = MaterialTheme.typography.titleMedium) }
         item {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                dns.forEach { (ip, name) -> FilterChip(selected = vm.upstream == ip, onClick = { vm.setUpstream(ip) }, label = { Text(name) }) }
+                dns.forEach { (ip, name) -> FilterChip(selected = vm.upstream == ip, onClick = { vm.changeUpstream(ip) }, label = { Text(name) }) }
             }
         }
         item {

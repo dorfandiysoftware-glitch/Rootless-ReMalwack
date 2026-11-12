@@ -83,9 +83,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         Blocklist.reloadRules(prefs)
     }
 
-    fun setAutoUpdate(v: Boolean) { prefs.autoUpdate = v; autoUpdate = v; UpdateWorker.schedule(getApplication(), v) }
-    fun setStartOnBoot(v: Boolean) { prefs.startOnBoot = v; startOnBoot = v }
-    fun setUpstream(v: String) { prefs.upstreamDns = v; upstream = v }
+    fun changeAutoUpdate(v: Boolean) { prefs.autoUpdate = v; autoUpdate = v; UpdateWorker.schedule(getApplication(), v) }
+    fun changeStartOnBoot(v: Boolean) { prefs.startOnBoot = v; startOnBoot = v }
+    fun changeUpstream(v: String) { prefs.upstreamDns = v; upstream = v }
 
     fun update() {
         if (updating) return
