@@ -1,39 +1,62 @@
 package dev.dorfandiy.remalwack.data
 
+/** Same profiles as the original Re-Malwack module (module/profiles/*.txt). */
 enum class Profile(val id: String, val title: String, val description: String) {
-    LITE("lite", "Lite", "Ads, malware and trackers. Smallest list, least chance of breaking apps."),
-    BALANCED("balanced", "Balanced", "Broader coverage with a good balance between blocking and breakage."),
-    AGGRESSIVE("aggressive", "Aggressive", "Maximum blocking incl. threat-intelligence feeds. May break some sites."),
-    CUSTOM("custom", "Custom", "Only your own sources (plus the categories you enable).");
+    DEFAULT("default", "Default", "Re-Malwack's OG default hosts sources list"),
+    LITE("lite", "Lite", "Light protection for devices with low resources."),
+    BALANCED("balanced", "Balanced", "Simple Castle-grade protection for everyday use."),
+    AGGRESSIVE("aggressive", "Aggressive", "Hardcore Fortress-level protection, may block some legitimate services."),
+    CUSTOM("custom", "Custom", "Only your own sources (plus the presets you enable).");
 
     companion object {
-        fun from(id: String?) = entries.firstOrNull { it.id == id } ?: BALANCED
+        fun from(id: String?) = entries.firstOrNull { it.id == id } ?: DEFAULT
     }
 }
 
 data class Source(val id: String, val name: String, val url: String)
 
-enum class Category(val id: String, val title: String, val description: String, val source: Source) {
-    PORN("porn", "Adult content", "Pornography sites",
-        Source("cat_porn", "StevenBlack porn", "https://raw.githubusercontent.com/StevenBlack/hosts/master/alternates/porn/hosts")),
-    GAMBLING("gambling", "Gambling", "Betting and casino sites",
-        Source("cat_gambling", "StevenBlack gambling", "https://raw.githubusercontent.com/StevenBlack/hosts/master/alternates/gambling/hosts")),
-    FAKENEWS("fakenews", "Fake news", "Known disinformation sites",
-        Source("cat_fakenews", "StevenBlack fakenews", "https://raw.githubusercontent.com/StevenBlack/hosts/master/alternates/fakenews/hosts")),
-    SOCIAL("social", "Social media", "Facebook, Twitter/X, TikTok and similar",
-        Source("cat_social", "StevenBlack social", "https://raw.githubusercontent.com/StevenBlack/hosts/master/alternates/social/hosts")),
+private const val SB = "https://raw.githubusercontent.com/StevenBlack/hosts/master"
+private const val HZ = "https://hagezi-mirror.dnsbunker.org/hosts"
+private const val RAY = "https://raw.githubusercontent.com/r-a-y/mobile-hosts/refs/heads/master"
+
+/** Preset blocking sources (same as the WebUI's "Preset Blocking Sources"). */
+enum class Category(val id: String, val title: String, val sources: List<Source>) {
+    PORN("porn", "Block pornography sites", listOf(
+        Source("cat_porn1", "StevenBlack porn", "$SB/alternates/porn-only/hosts"),
+        Source("cat_porn2", "Anti-Porn HOSTS", "https://raw.githubusercontent.com/4skinSkywalker/Anti-Porn-HOSTS-File/refs/heads/master/HOSTS.txt"))),
+    GAMBLING("gambling", "Block gambling sites", listOf(
+        Source("cat_gambling1", "StevenBlack gambling", "$SB/alternates/gambling-only/hosts"),
+        Source("cat_gambling2", "BlocklistProject gambling", "https://blocklistproject.github.io/Lists/gambling.txt"))),
+    FAKENEWS("fakenews", "Block fake news sites", listOf(
+        Source("cat_fakenews", "StevenBlack fakenews", "$SB/alternates/fakenews-only/hosts"))),
+    SOCIAL("social", "Block social media sites", listOf(
+        Source("cat_social", "StevenBlack social", "$SB/alternates/social-only/hosts"))),
+    TRACKERS("trackers", "Block trackers sites", listOf(
+        Source("cat_trackers1", "AdGuard Tracking", "$RAY/AdguardTracking.txt"),
+        Source("cat_trackers2", "BlocklistProject tracking", "https://blocklistproject.github.io/Lists/tracking.txt"))),
+    SAFEBROWSING("safebrowsing", "Enable Safebrowsing", listOf(
+        Source("cat_safebrowsing", "Re-Malwack safebrowsing", "https://raw.githubusercontent.com/Re-Malwack/hosts/refs/heads/main/blocklists/safebrowsing.txt")));
 }
 
 object Sources {
-    private val lite = Source("lite", "StevenBlack unified", "https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts")
-    private val balanced = Source("balanced", "HaGeZi Multi PRO", "https://raw.githubusercontent.com/hagezi/dns-blocklists/main/hosts/pro.txt")
-    private val aggressive = Source("aggressive", "HaGeZi Multi PRO++", "https://raw.githubusercontent.com/hagezi/dns-blocklists/main/hosts/pro.plus.txt")
-    private val tif = Source("tif", "HaGeZi Threat Intelligence", "https://raw.githubusercontent.com/hagezi/dns-blocklists/main/hosts/tif.txt")
+    private val sb = Source("sb", "StevenBlack Unified", "$SB/hosts")
+    private val hzLight = Source("hz_light", "HaGeZi Light", "$HZ/light.txt")
+    private val hzMulti = Source("hz_multi", "HaGeZi Multi", "$HZ/multi.txt")
+    private val hzPro = Source("hz_pro", "HaGeZi Pro", "$HZ/pro.txt")
+    private val hzProPlus = Source("hz_proplus", "HaGeZi Pro++", "$HZ/pro.plus.txt")
+    private val oneHosts = Source("1hosts", "1Hosts Lite", "https://badmojr.github.io/1Hosts/Lite/hosts.txt")
+    private val agDns = Source("ag_dns", "AdGuard DNS", "$RAY/AdguardDNS.txt")
+    private val agAds = Source("ag_ads", "AdGuard Mobile Ads", "$RAY/AdguardMobileAds.txt")
+    private val agSpy = Source("ag_spy", "AdGuard Mobile Spyware", "$RAY/AdguardMobileSpyware.txt")
+    private val rem = Source("rem01", "Rem01Gaming AdBlock", "https://hosts.rem01gaming.dev/adblock")
+    private val blpAds = Source("blp_ads", "BlocklistProject Ads", "https://blocklistproject.github.io/Lists/ads.txt")
+    private val blpRedirect = Source("blp_redirect", "BlocklistProject Redirects", "https://blocklistproject.github.io/Lists/redirect.txt")
 
     fun forProfile(p: Profile): List<Source> = when (p) {
-        Profile.LITE -> listOf(lite)
-        Profile.BALANCED -> listOf(balanced)
-        Profile.AGGRESSIVE -> listOf(aggressive, tif)
+        Profile.DEFAULT -> listOf(sb, hzPro, oneHosts, agDns, agAds, agSpy, rem, blpAds)
+        Profile.LITE -> listOf(sb, hzLight, agAds, agSpy)
+        Profile.BALANCED -> listOf(sb, hzMulti, oneHosts, agDns, agAds, agSpy, rem)
+        Profile.AGGRESSIVE -> listOf(sb, hzProPlus, oneHosts, agDns, agAds, agSpy, rem, blpAds, blpRedirect)
         Profile.CUSTOM -> emptyList()
     }
 

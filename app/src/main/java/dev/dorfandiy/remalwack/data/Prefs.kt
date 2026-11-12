@@ -53,7 +53,7 @@ class Prefs(ctx: Context) {
     fun activeSources(): List<Source> {
         val list = ArrayList<Source>()
         list += Sources.forProfile(profile)
-        list += Category.entries.filter { it.id in categories }.map { it.source }
+        list += Category.entries.filter { it.id in categories }.flatMap { it.sources }
         list += Sources.custom(customSources)
         return list
     }

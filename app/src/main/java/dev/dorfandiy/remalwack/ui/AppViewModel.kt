@@ -13,6 +13,9 @@ import dev.dorfandiy.remalwack.data.Prefs
 import dev.dorfandiy.remalwack.data.Profile
 import dev.dorfandiy.remalwack.data.Updater
 import dev.dorfandiy.remalwack.vpn.DnsVpnService
+import dev.dorfandiy.remalwack.shizuku.ShizukuHelper
+import dev.dorfandiy.remalwack.shizuku.ShizukuStatus
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
@@ -35,14 +38,23 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     var dirty by mutableStateOf(false); private set
     var queryResult by mutableStateOf<String?>(null); private set
 
+    val shizuku: StateFlow<ShizukuStatus> = ShizukuHelper.status
+    var shizukuMsg by mutableStateOf<String?>(null); private set
+    var privateDns by mutableStateOf(false); private set
+    var autoInterval by mutableStateOf(prefs.sp.getInt("auto_hours", 24)); private set
+
     init {
+        ShizukuHelper.init()
+        // Auto-update on launch when the lists are stale (or were never downloaded).
+        val stale = System.currentTimeMillis() - prefs.lastUpdated > autoInterval * 3600_000L
+        if (autoUpdate && (prefs.lastUpdated == 0L || stale)) update()
         viewModelScope.launch(Dispatchers.IO) { Blocklist.load(getApplication()) }
         refreshCounts()
-        UpdateWorker.schedule(app, autoUpdate)
+        UpdateWorker.schedule(app, autoUpdate, autoInterval)
     }
 
     private fun refreshCounts() {
-        counts = (prefs.activeSources().map { it.id } + Category.entries.map { it.source.id })
+        counts = (prefs.activeSources().map { it.id } + Category.entries.flatMap { c -> c.sources.map { it.id } })
             .associateWith { prefs.sourceCount(it) }
     }
 
@@ -83,8 +95,24 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         Blocklist.reloadRules(prefs)
     }
 
-    fun changeAutoUpdate(v: Boolean) { prefs.autoUpdate = v; autoUpdate = v; UpdateWorker.schedule(getApplication(), v) }
+    fun changeAutoUpdate(v: Boolean) { prefs.autoUpdate = v; autoUpdate = v; UpdateWorker.schedule(getApplication(), v, autoInterval) }
     fun changeStartOnBoot(v: Boolean) { prefs.startOnBoot = v; startOnBoot = v }
+    fun changeInterval(h: Int) {
+        prefs.sp.edit().putInt("auto_hours", h).apply(); autoInterval = h
+        UpdateWorker.schedule(getApplication(), autoUpdate, h)
+    }
+
+    fun shizukuRequest() = ShizukuHelper.requestPermission()
+    fun shizukuRefresh() { ShizukuHelper.refresh(); viewModelScope.launch(Dispatchers.IO) { privateDns = runCatching { ShizukuHelper.privateDnsActive() }.getOrDefault(false) } }
+    fun shizukuGrant() = viewModelScope.launch(Dispatchers.IO) { shizukuMsg = ShizukuHelper.setupPermissions(getApplication()) }
+    fun changePrivateDns(on: Boolean) = viewModelScope.launch(Dispatchers.IO) {
+        val r = ShizukuHelper.setPrivateDns(on)
+        shizukuMsg = if (r.startsWith("ERR")) r else if (on) "Private DNS: ${ShizukuHelper.DNS_HOST}" else "Private DNS restored to automatic"
+        privateDns = ShizukuHelper.privateDnsActive()
+    }
+    fun clearShizukuMsg() { shizukuMsg = null }
+    fun changeProfileName(p: Profile) = selectProfile(p)
+
     fun changeUpstream(v: String) { prefs.upstreamDns = v; upstream = v }
 
     fun update() {
@@ -97,6 +125,17 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             if (r.isSuccess) { dirty = false; DnsVpnService.reload(getApplication()) }
             refreshCounts()
             updating = false
+        }
+    }
+
+    fun reset() {
+        viewModelScope.launch(Dispatchers.IO) {
+            Blocklist.save(getApplication(), LongArray(0)); Blocklist.load(getApplication())
+            prefs.totalEntries = 0; prefs.lastUpdated = 0; totalEntries = 0; lastUpdated = 0
+            counts = counts.mapValues { 0 }
+            Category.entries.forEach { c -> c.sources.forEach { prefs.setSourceCount(it.id, 0) } }
+            progress = "Hosts reset"; dirty = false
+            DnsVpnService.reload(getApplication())
         }
     }
 

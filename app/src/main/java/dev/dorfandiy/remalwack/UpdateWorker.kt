@@ -21,10 +21,10 @@ class UpdateWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(ctx
 
     companion object {
         private const val NAME = "hosts_update"
-        fun schedule(ctx: Context, enabled: Boolean) {
+        fun schedule(ctx: Context, enabled: Boolean, hours: Int = 24) {
             val wm = WorkManager.getInstance(ctx)
             if (!enabled) { wm.cancelUniqueWork(NAME); return }
-            val req = PeriodicWorkRequestBuilder<UpdateWorker>(24, TimeUnit.HOURS)
+            val req = PeriodicWorkRequestBuilder<UpdateWorker>(hours.toLong(), TimeUnit.HOURS)
                 .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.UNMETERED).build())
                 .build()
             wm.enqueueUniquePeriodicWork(NAME, ExistingPeriodicWorkPolicy.UPDATE, req)
