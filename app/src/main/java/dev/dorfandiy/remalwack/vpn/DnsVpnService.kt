@@ -102,6 +102,17 @@ class DnsVpnService : VpnService() {
         val srcPort = ((buf[ihl].toInt() and 0xFF) shl 8) or (buf[ihl + 1].toInt() and 0xFF)
 
         val q = parseQuestion(dns) ?: run { forward(dns, srcIp, dstIp, srcPort, upstream); return }
+        if (q.name in DOH_CANARY) {
+            // Firefox/Gecko disables its built-in DNS-over-HTTPS when this domain returns NXDOMAIN.
+            VpnState.record(q.name, true)
+            val r = ByteArray(q.end)
+            System.arraycopy(dns, 0, r, 0, q.end)
+            r[2] = (0x80 or (dns[2].toInt() and 0x01)).toByte()
+            r[3] = 0x83.toByte() // RA=1, RCODE=3 (NXDOMAIN)
+            r[6] = 0; r[7] = 0; r[8] = 0; r[9] = 0; r[10] = 0; r[11] = 0
+            write(r, srcIp, dstIp, srcPort)
+            return
+        }
         val blocked = Blocklist.isBlocked(q.name)
         VpnState.record(q.name, blocked)
         if (blocked && (q.type == 1 || q.type == 28 || q.type == 65)) {
@@ -110,6 +121,8 @@ class DnsVpnService : VpnService() {
             forward(dns, srcIp, dstIp, srcPort, upstream)
         }
     }
+
+    private val DOH_CANARY = setOf("use-application-dns.net", "mask.icloud.com", "mask-h2.icloud.com")
 
     private class Question(val name: String, val type: Int, val end: Int)
 
