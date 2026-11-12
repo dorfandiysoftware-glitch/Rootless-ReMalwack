@@ -1,6 +1,6 @@
 package dev.dorfandiy.remalwack.data
 
-/** Same profiles as the original Re-Malwack module (module/profiles/*.txt). */
+/** Same profiles as the original Re-Malwack module (module/profiles). */
 enum class Profile(val id: String, val title: String, val description: String) {
     DEFAULT("default", "Default", "Re-Malwack's OG default hosts sources list"),
     LITE("lite", "Lite", "Light protection for devices with low resources."),
