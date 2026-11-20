@@ -9,7 +9,10 @@ import androidx.lifecycle.viewModelScope
 import dev.dorfandiy.remalwack.UpdateWorker
 import dev.dorfandiy.remalwack.data.Blocklist
 import dev.dorfandiy.remalwack.data.Category
+import dev.dorfandiy.remalwack.data.Mode
 import dev.dorfandiy.remalwack.data.Prefs
+import dev.dorfandiy.remalwack.dns.PrivateDns
+import dev.dorfandiy.remalwack.vpn.Watchdog
 import dev.dorfandiy.remalwack.data.Profile
 import dev.dorfandiy.remalwack.data.Updater
 import dev.dorfandiy.remalwack.vpn.DnsVpnService
@@ -40,7 +43,16 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     val shizuku: StateFlow<ShizukuStatus> = ShizukuHelper.status
     var shizukuMsg by mutableStateOf<String?>(null); private set
-    var privateDns by mutableStateOf(false); private set
+    var mode by mutableStateOf(prefs.mode); private set
+    var seamless by mutableStateOf(prefs.seamless); private set
+    var uboCompat by mutableStateOf(prefs.uboCompat); private set
+    var excluded by mutableStateOf(prefs.excludedApps); private set
+    var theme by mutableStateOf(prefs.theme); private set
+    var dnsId by mutableStateOf(prefs.privateDnsId); private set
+    var dnsCustom by mutableStateOf(prefs.privateDnsCustom); private set
+    var dnsActive by mutableStateOf(false); private set
+    var dnsNote by mutableStateOf<String?>(null); private set
+    var needVpnPermission by mutableStateOf(false); private set
     var autoInterval by mutableStateOf(prefs.sp.getInt("auto_hours", 24)); private set
 
     init {
@@ -51,6 +63,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch(Dispatchers.IO) { Blocklist.load(getApplication()) }
         refreshCounts()
         UpdateWorker.schedule(app, autoUpdate, autoInterval)
+        Watchdog.schedule(app, seamless && mode == Mode.VPN)
+        refreshDns()
     }
 
     private fun refreshCounts() {
@@ -103,13 +117,60 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun shizukuRequest() = ShizukuHelper.requestPermission()
-    fun shizukuRefresh() { ShizukuHelper.refresh(); viewModelScope.launch(Dispatchers.IO) { privateDns = runCatching { ShizukuHelper.privateDnsActive() }.getOrDefault(false) } }
-    fun shizukuGrant() = viewModelScope.launch(Dispatchers.IO) { shizukuMsg = ShizukuHelper.setupPermissions(getApplication()) }
-    fun changePrivateDns(on: Boolean) = viewModelScope.launch(Dispatchers.IO) {
-        val r = ShizukuHelper.setPrivateDns(on)
-        shizukuMsg = if (r.startsWith("ERR")) r else if (on) "Private DNS: ${ShizukuHelper.DNS_HOST}" else "Private DNS restored to automatic"
-        privateDns = ShizukuHelper.privateDnsActive()
+    fun shizukuRefresh() { ShizukuHelper.refresh(); refreshDns() }
+    fun shizukuGrant() = viewModelScope.launch(Dispatchers.IO) { shizukuMsg = ShizukuHelper.setupPermissions(getApplication()); refreshDns() }
+
+    fun refreshDns() {
+        dnsActive = runCatching { PrivateDns.isActive(getApplication(), PrivateDns.host(prefs)) }.getOrDefault(false)
     }
+
+    fun changeDnsProvider(id: String) { prefs.privateDnsId = id; dnsId = id; dnsNote = null; refreshDns() }
+    fun changeDnsCustom(h: String) { prefs.privateDnsCustom = h; dnsCustom = h; refreshDns() }
+
+    private fun applyPrivateDns() = viewModelScope.launch(Dispatchers.IO) {
+        val app = getApplication<Application>()
+        val host = PrivateDns.host(prefs)
+        when (val r = PrivateDns.apply(app, host)) {
+            is PrivateDns.Result.Applied -> { prefs.privateDnsOurs = true; dnsNote = "Private DNS: $host" }
+            is PrivateDns.Result.Manual -> {
+                PrivateDns.copyHost(app, r.host)
+                dnsNote = "Hostname copied. Open Settings → Network → Private DNS, choose \"Private DNS provider hostname\" and paste it."
+            }
+            is PrivateDns.Result.Failed -> dnsNote = r.message
+        }
+        refreshDns()
+    }
+
+    fun applyDnsAgain() { applyPrivateDns() }
+
+    /** Switch protection mode. VPN needs a consent dialog, so the UI is told via [needVpnPermission]. */
+    fun changeMode(m: Mode) {
+        val app = getApplication<Application>()
+        if (m == mode) return
+        mode = m; prefs.mode = m
+        when (m) {
+            Mode.OFF -> { DnsVpnService.stop(app); restoreDns() }
+            Mode.PRIVATE_DNS -> { DnsVpnService.stop(app); applyPrivateDns() }
+            Mode.VPN -> { restoreDns(); needVpnPermission = true }
+        }
+        Watchdog.schedule(app, seamless && m == Mode.VPN)
+    }
+
+    fun vpnPermissionHandled() { needVpnPermission = false }
+
+    private fun restoreDns() = viewModelScope.launch(Dispatchers.IO) {
+        if (prefs.privateDnsOurs) { if (PrivateDns.restore(getApplication())) prefs.privateDnsOurs = false }
+        refreshDns()
+    }
+
+    fun changeSeamless(v: Boolean) {
+        prefs.seamless = v; seamless = v
+        Watchdog.schedule(getApplication(), v && mode == Mode.VPN)
+    }
+
+    fun changeUbo(v: Boolean) { prefs.uboCompat = v; uboCompat = v; Blocklist.reloadRules(prefs) }
+    fun changeExcluded(s: Set<String>) { prefs.excludedApps = s; excluded = s }
+    fun changeTheme(t: Int) { prefs.theme = t; theme = t }
     fun clearShizukuMsg() { shizukuMsg = null }
     fun changeProfileName(p: Profile) = selectProfile(p)
 

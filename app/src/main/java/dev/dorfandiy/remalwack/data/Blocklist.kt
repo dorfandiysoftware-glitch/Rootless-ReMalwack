@@ -29,6 +29,21 @@ object Blocklist {
 
     enum class Verdict { WHITELISTED, BLACKLISTED, BLOCKED, ALLOWED }
 
+    /**
+     * Hosts a content blocker such as uBlock Origin needs to download its filter lists and
+     * updates. They are never blocked by the hosts lists while the compatibility option is on.
+     */
+    private val uboHosts = setOf(
+        "ublockorigin.github.io", "ublockorigin.pages.dev", "raw.githubusercontent.com",
+        "github.com", "objects.githubusercontent.com", "gitlab.com", "cdn.jsdelivr.net",
+        "easylist.to", "easylist-downloads.adblockplus.org", "secure.fanboy.co.nz",
+        "filters.adtidy.org", "malware-filter.gitlab.io", "pgl.yoyo.org", "cdn.statically.io",
+        "easylist-msie.adblockplus.org", "adblockplus.org", "abp.oisd.nl",
+        "addons.mozilla.org", "addons.cdn.mozilla.net",
+    )
+    private val uboRules = Rules(uboHosts, uboHosts)
+    @Volatile var uboCompat = true
+
     fun file(ctx: Context) = File(ctx.filesDir, "blocklist.bin")
 
     fun hash(domain: String): Long {
@@ -63,6 +78,7 @@ object Blocklist {
     }
 
     fun reloadRules(prefs: Prefs) {
+        uboCompat = prefs.uboCompat
         white = rules(prefs.whitelist)
         black = rules(prefs.blacklist)
     }
@@ -83,6 +99,7 @@ object Blocklist {
         if (d.isEmpty()) return Verdict.ALLOWED
         if (white.matches(d)) return Verdict.WHITELISTED
         if (black.matches(d)) return Verdict.BLACKLISTED
+        if (uboCompat && uboRules.matches(d)) return Verdict.ALLOWED
         return if (java.util.Arrays.binarySearch(hashes, hash(d)) >= 0) Verdict.BLOCKED else Verdict.ALLOWED
     }
 

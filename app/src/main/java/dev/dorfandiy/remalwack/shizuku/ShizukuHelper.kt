@@ -73,16 +73,10 @@ object ShizukuHelper {
         return if (a.startsWith("ERR") ) a else if (b.startsWith("ERR")) "Granted secure settings (VPN pre-approval failed: $b)" else "Permissions granted"
     }
 
-    const val DNS_HOST = "dns.adguard-dns.com"
-
-    /** VPN-free mode: switch system Private DNS to a filtering DoT provider. */
-    fun setPrivateDns(on: Boolean): String {
-        val cmd = if (on) "settings put global private_dns_specifier $DNS_HOST && settings put global private_dns_mode hostname"
+    /** Switches system Private DNS to [host] (on) or back to automatic (off). Null if Shizuku isn't connected. */
+    fun setPrivateDns(host: String, on: Boolean): String? {
+        val cmd = if (on) "settings put global private_dns_specifier $host && settings put global private_dns_mode hostname"
         else "settings put global private_dns_mode opportunistic"
-        return exec(cmd) ?: "Shizuku service not connected yet, try again"
+        return exec(cmd)
     }
-
-    fun privateDnsActive(): Boolean =
-        exec("settings get global private_dns_mode")?.trim() == "hostname" &&
-            exec("settings get global private_dns_specifier")?.trim() == DNS_HOST
 }
